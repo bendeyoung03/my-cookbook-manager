@@ -1,0 +1,23 @@
+{
+  "name": "My Cookbook Manager",
+  "short_name": "Cookbook",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f121a",
+  "theme_color": "#0f121a",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='192'%20height='192'%20viewBox='0%200%20192%20192'%3E%3Crect%20rx='40'%20width='192'%20height='192'%20fill='%232a74ff'/%3E%3Cpath%20d='M56%2056h76c10%200%2018%208%2018%2018v74c-7-6-16-9-26-9H56V56z'%20fill='white'/%3E%3Cpath%20d='M56%2056h18v83H56c-10%200-18%208-18%2018V74c0-10%208-18%2018-18z'%20fill='rgba(255,255,255,0.85)'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='512'%20height='512'%20viewBox='0%200%20512%20512'%3E%3Crect%20rx='108'%20width='512'%20height='512'%20fill='%232a74ff'/%3E%3Cpath%20d='M150%20150h212c28%200%2050%2022%2050%2050v206c-20-16-44-24-72-24H150V150z'%20fill='white'/%3E%3Cpath%20d='M150%20150h52v232h-52c-28%200-50%2022-50%2050V200c0-28%2022-50%2050-50z'%20fill='rgba(255,255,255,0.85)'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
