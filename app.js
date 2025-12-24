@@ -16,6 +16,11 @@ let state = {
   viewingId: null,
 };
 
+// ====== Add flow draft photos (kept in-memory only) ======
+let addManualPhotoBlobs = [];
+let addPhotoOnlyBlobs = [];
+
+
 // ====== Boot ======
 (async function init() {
   db = await openDB();
@@ -215,29 +220,82 @@ function backButton(text, aria, onClick) {
 
 // ====== Recipes Screen ======
 function recipesScreenHTML() {
-  const hasAny = (state.recipes || []).length > 0;
-
-  const empty = !hasAny ? `
-    <div class="card empty-card">
-      <div class="empty-emoji">📚</div>
-      <div class="empty-title">Your cookbook is empty</div>
-      <div class="empty-sub">Tap + in the top-right to add your first recipe.</div>
-    </div>
-  ` : '';
-
   return `
     <div class="card">
       <div class="label">Search</div>
-      <input class="input" id="search" placeholder="Search by name or ingredient" value="${escapeAttr(state.search)}" />
-      <div class="small" style="margin-top:8px">Tip: Add this app to your Home Screen for the best experience.</div>
+      <input
+        class="input"
+        id="search"
+        placeholder="Search by name or ingredient"
+        value="${escapeAttr(state.search)}"
+      />
     </div>
 
-    ${empty}
+    <div id="recipesContent">
+      ${renderFavoritesSection()}
+      ${state.categories.map(c => renderCategorySection(c)).join('')}
+    </div>
+  `;
+}
 
+function rerenderRecipesOnly() {
+  const container = document.getElementById('recipesContent');
+  if (!container) return;
+
+  container.innerHTML = `
     ${renderFavoritesSection()}
     ${state.categories.map(c => renderCategorySection(c)).join('')}
   `;
+
+  // Rebind favorites collapse/expand button (if present)
+  const toggleFav = document.getElementById('toggleFav');
+  if (toggleFav) {
+    toggleFav.onclick = async () => {
+      state.favoritesCollapsed = !state.favoritesCollapsed;
+      await setSetting(db, 'favoritesCollapsed', state.favoritesCollapsed);
+      rerenderRecipesOnly();
+    };
+  }
+
+  // Rebind recipe clicks (same behavior as bindRecipesScreen)
+document.querySelectorAll('[data-open-recipe]').forEach(el => {
+  el.onclick = () => {
+    state.viewingId = el.dataset.openRecipe;
+    state.screen = 'recipe';
+    render();
+  };
+});
+
 }
+
+
+
+function rerenderRecipesContentOnly() {
+  const host = document.getElementById('recipesContent');
+  if (!host) return;
+
+  host.innerHTML = `
+    ${renderFavoritesSection()}
+    ${state.categories.map(c => renderCategorySection(c)).join('')}
+  `;
+
+  // Rebind favorites collapse button
+  const toggleFav = document.getElementById('toggleFav');
+  if (toggleFav) {
+    toggleFav.onclick = async () => {
+      state.favoritesCollapsed = !state.favoritesCollapsed;
+      await setSetting(db, 'favoritesCollapsed', state.favoritesCollapsed);
+      rerenderRecipesContentOnly();
+    };
+  }
+
+  // Rebind recipe open clicks
+  document.querySelectorAll('[data-open-recipe]').forEach(el => {
+    el.onclick = () => openRecipe(el.dataset.openRecipe); // <-- CHANGE THIS LINE IF NEEDED (see below)
+  });
+}
+
+
 
 function renderFavoritesSection() {
   const favs = filteredRecipes().filter(r => r.isFavorite);
@@ -279,23 +337,33 @@ function renderCategorySection(category) {
 
 function recipeRowHTML(r) {
   const hasPhoto = r.photos && r.photos.length;
+
+  // Use first photo as preview thumbnail
+  const thumbHTML = hasPhoto
+    ? `<img class="rowthumb" src="${URL.createObjectURL(r.photos[0])}" alt="" />`
+    : `<div class="rowthumb rowthumb--placeholder" aria-hidden="true">🍽️</div>`;
+
   return `
     <div class="item" data-open-recipe="${r.id}">
-      <div style="min-width:0">
+      ${thumbHTML}
+      <div style="min-width:0; flex:1">
         <div class="item-title">${escapeHTML(r.title || 'Untitled')}</div>
         <div class="badge">${r.isPhotoOnly ? 'Photo-only' : `${(r.ingredients || []).length} ingredients`}${r.isFavorite ? ' • ★' : ''}</div>
       </div>
-      ${hasPhoto ? '<div class="badge">📷</div>' : '<div class="badge">›</div>'}
+      <div class="badge">›</div>
     </div>
   `;
 }
 
+
 function bindRecipesScreen() {
   const search = document.getElementById('search');
   search.addEventListener('input', () => {
-    state.search = search.value;
-    render();
-  });
+  state.search = search.value;
+  rerenderRecipesOnly();
+});
+
+
 
   const toggleFav = document.getElementById('toggleFav');
   if (toggleFav) {
@@ -333,11 +401,25 @@ function recipeFullScreenHTML(r) {
   }
 
   // Small photo banner (not huge). Tap to enlarge.
-  const banner = (r.photos && r.photos.length)
-    ? `<div class="recipe-banner">
-         <img src="${URL.createObjectURL(r.photos[0])}" alt="Recipe photo" data-open-photo="0" />
-       </div>`
+    // Photo banner + optional thumbnail strip. Tap any to open gallery.
+  const photos = (r.photos || []);
+  const banner = photos.length
+    ? `
+      <div class="recipe-banner">
+        <img src="${URL.createObjectURL(photos[0])}" alt="Recipe photo" data-open-photo="0" />
+      </div>
+      ${photos.length > 1 ? `
+  <div class="photo-strip" aria-label="Additional recipe photos">
+    ${photos.slice(1).map((b, i) => {
+      const idx = i + 1; // real index in r.photos
+      return `<img class="stripthumb" src="${URL.createObjectURL(b)}" alt="Recipe photo ${idx + 1}" data-open-photo="${idx}" />`;
+    }).join('')}
+  </div>
+` : ''}
+
+    `
     : '';
+
 
   const ingredientsHTML = r.isPhotoOnly
     ? `<div class="small">This is a photo-only recipe.</div>`
@@ -411,38 +493,116 @@ function bindRecipeFullScreen(r) {
     });
   });
 
-  // tap banner image to enlarge
+    // tap any photo (banner or strip) to open gallery
   document.querySelectorAll('[data-open-photo]').forEach(el => {
     el.addEventListener('click', () => {
       const idx = Number(el.dataset.openPhoto);
-      const blob = r.photos[idx];
-      if (!blob) return;
-      openPhotoViewer(blob);
+      const blobs = r.photos || [];
+      if (!blobs.length) return;
+      openPhotoViewerGallery(blobs, idx);
     });
   });
 }
 
 function openPhotoViewer(blob) {
+  // Backward-compatible single-photo viewer
+  openPhotoViewerGallery([blob], 0);
+}
+
+function openPhotoViewerGallery(blobs, startIndex = 0) {
+  if (!blobs || !blobs.length) return;
+
+  let idx = Math.max(0, Math.min(startIndex, blobs.length - 1));
+  let currentUrl = null;
+
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
 
   const modal = document.createElement('div');
   modal.className = 'modal';
 
-  const url = URL.createObjectURL(blob);
   modal.innerHTML = `
-    <div class="row-between" style="margin-bottom:10px">
-      <div class="item-title">Photo</div>
-      <button class="btn" id="close">Done</button>
-    </div>
-    <img class="full" src="${url}" alt="Photo" />
-  `;
+  <div class="row-between" style="margin-bottom:10px">
+    <div class="item-title">Photo <span class="small" id="photoCount"></span></div>
+    <button class="btn" id="close">Done</button>
+  </div>
+
+    <div class="modal-photo-wrap">
+    <img class="full" id="photoImg" alt="Photo" />
+  </div>
+
+  <div class="photo-dots" id="photoDots" aria-hidden="true"></div>
+`;
+
+  function renderAt(i) {
+  idx = i;
+  const img = modal.querySelector('#photoImg');
+  const count = modal.querySelector('#photoCount');
+  const dotsHost = modal.querySelector('#photoDots');
+
+  if (currentUrl) URL.revokeObjectURL(currentUrl);
+  currentUrl = URL.createObjectURL(blobs[idx]);
+  img.src = currentUrl;
+
+  count.textContent = `(${idx + 1}/${blobs.length})`;
+
+  // ----- dot indicators -----
+  dotsHost.innerHTML = blobs.map((_, d) =>
+    `<span class="photo-dot ${d === idx ? 'active' : ''}"></span>`
+  ).join('');
+}
+
 
   backdrop.appendChild(modal);
   document.body.appendChild(backdrop);
-  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
-  modal.querySelector('#close').addEventListener('click', () => backdrop.remove());
+
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) {
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
+      backdrop.remove();
+    }
+  });
+
+  modal.querySelector('#close').addEventListener('click', () => {
+    if (currentUrl) URL.revokeObjectURL(currentUrl);
+    backdrop.remove();
+  });
+
+  // Keyboard support (nice on laptop)
+  window.addEventListener('keydown', function onKey(e) {
+    if (!document.body.contains(backdrop)) {
+      window.removeEventListener('keydown', onKey);
+      return;
+    }
+    if (e.key === 'ArrowLeft' && idx > 0) renderAt(idx - 1);
+    if (e.key === 'ArrowRight' && idx < blobs.length - 1) renderAt(idx + 1);
+    if (e.key === 'Escape') modal.querySelector('#close').click();
+  });
+
+  renderAt(idx);
+    // Swipe support (touch)
+  let startX = null;
+  const imgEl = modal.querySelector('#photoImg');
+
+  imgEl.addEventListener('touchstart', (e) => {
+    startX = e.touches?.[0]?.clientX ?? null;
+  }, { passive: true });
+
+  imgEl.addEventListener('touchend', (e) => {
+    if (startX === null) return;
+    const endX = e.changedTouches?.[0]?.clientX ?? startX;
+    const dx = endX - startX;
+    startX = null;
+
+    // threshold
+    if (Math.abs(dx) < 40) return;
+
+    if (dx > 0 && idx > 0) renderAt(idx - 1);           // swipe right -> prev
+    if (dx < 0 && idx < blobs.length - 1) renderAt(idx + 1); // swipe left -> next
+  }, { passive: true });
+
 }
+
 
 // ====== Add Screen (OCR removed) ======
 function addScreenHTML() {
@@ -450,8 +610,8 @@ function addScreenHTML() {
     <div class="card">
       <div class="section-title" style="margin-top:0">Choose how to add</div>
       <div class="list">
-        <button class="btn btn-primary" id="addManual">Add Manually</button>
-        <button class="btn" id="addPhotoOnly">Add Photo Only</button>
+        <button class="btn" id="addManual">Add Manually</button>
+        <button class="btn" id="addPhotoOnly">Add with Photo</button>
       </div>
     </div>
 
@@ -462,16 +622,31 @@ function addScreenHTML() {
 function bindAddScreen() {
   const host = document.getElementById('addFlow');
 
-  document.getElementById('addManual').onclick = () => {
+    document.getElementById('addManual').onclick = () => {
+    setAddModeActive('manual');
     host.innerHTML = manualFormHTML({ mode: 'manual' });
     bindManualForm({ mode: 'manual' });
   };
 
   document.getElementById('addPhotoOnly').onclick = () => {
+    setAddModeActive('photo');
     host.innerHTML = photoOnlyFormHTML({});
     bindPhotoOnlyForm();
   };
+
+setAddModeActive('manual');
+
 }
+
+function setAddModeActive(mode){
+  const m = document.getElementById('addManual');
+  const p = document.getElementById('addPhotoOnly');
+  if (!m || !p) return;
+
+  m.classList.toggle('btn-primary', mode === 'manual');
+  p.classList.toggle('btn-primary', mode === 'photo');
+}
+
 
 // ====== Edit Screen ======
 function editScreenHTML(r) {
@@ -482,7 +657,7 @@ function editScreenHTML(r) {
   const ingredientsText = (r.ingredients || []).map(i => i.text).join('\n');
   const instructionsText = (r.instructions || []).join('\n');
 
-  const photoStrip = (r.photos && r.photos.length)
+    const photoStrip = (r.photos && r.photos.length)
     ? `
       <div class="section-title" style="margin-top:0">Current Photos</div>
       <div class="row" style="flex-wrap:wrap">
@@ -491,11 +666,15 @@ function editScreenHTML(r) {
           return `
             <div style="position:relative">
               <img class="thumb" src="${url}" alt="photo" />
-              <button class="btn btn-icon" data-remove-photo="${idx}" style="position:absolute; top:-8px; right:-8px;">✕</button>
+              <button class="photo-del" type="button" data-remove-photo="${idx}" aria-label="Remove photo">✕</button>
             </div>
           `;
         }).join('')}
       </div>
+
+      <div class="label" style="margin-top:12px">Add photo(s) (optional)</div>
+      <input class="input" id="e_photo" type="file" accept="image/*" multiple />
+
       <div class="hr"></div>
     `
     : '';
@@ -512,8 +691,10 @@ function editScreenHTML(r) {
       <div class="label">Category</div>
       <select class="select" id="e_category">${categoryOptionsHTML(defaultCat)}</select>
 
-      <div class="label">Add photo (optional)</div>
-      <input class="input" id="e_photo" type="file" accept="image/*" />
+            ${(!r.photos || !r.photos.length) ? `
+        <div class="label">Add photo(s) (optional)</div>
+        <input class="input" id="e_photo" type="file" accept="image/*" multiple />
+      ` : ''}
 
       <div class="label">Ingredients (one per line)</div>
       <textarea class="textarea" id="e_ingredients">${escapeHTML(ingredientsText)}</textarea>
@@ -543,13 +724,17 @@ function bindEditScreen(r) {
     });
   });
 
-  let newPhotoBlob = null;
-  const fileEl = document.getElementById('e_photo');
-  fileEl.onchange = async () => {
-    const f = fileEl.files?.[0];
-    if (!f) return;
-    newPhotoBlob = await fileToJpegBlob(f);
-  };
+  let newPhotoBlobs = [];
+const fileEl = document.getElementById('e_photo');
+fileEl.onchange = async () => {
+  const files = Array.from(fileEl.files || []);
+  if (!files.length) return;
+  newPhotoBlobs = [];
+  for (const f of files) {
+    newPhotoBlobs.push(await fileToJpegBlob(f));
+  }
+};
+
 
   document.getElementById('e_save').onclick = async () => {
     const title = document.getElementById('e_title').value.trim();
@@ -574,11 +759,12 @@ function bindEditScreen(r) {
     r.ingredients = ingredients;
     r.instructions = instructions;
 
-    if (newPhotoBlob) {
+    if (newPhotoBlobs.length) {
       r.photos = r.photos || [];
-      r.photos.push(newPhotoBlob);
-      newPhotoBlob = null;
+      r.photos.push(...newPhotoBlobs);
+      newPhotoBlobs = [];
     }
+
 
     await putOne(db, Stores.recipes, r);
     await loadAll();
@@ -610,7 +796,7 @@ function categoryOptionsHTML(selectedId) {
     .join('');
 }
 
-function manualFormHTML({ mode, title = '', categoryId, ingredientsText = '', instructionsText = '', photoPreviewUrl = '' }) {
+function manualFormHTML({ mode, title = '', categoryId, ingredientsText = '', instructionsText = '', photoPreviewUrls = [] }) {
   const defaultCat = categoryId || (state.categories[0]?.id || '');
   return `
     <div class="section-title">Manual Entry</div>
@@ -621,9 +807,13 @@ function manualFormHTML({ mode, title = '', categoryId, ingredientsText = '', in
       <div class="label">Category</div>
       <select class="select" id="m_category">${categoryOptionsHTML(defaultCat)}</select>
 
-      <div class="label">Photo (optional)</div>
-      <input class="input" id="m_photo" type="file" accept="image/*" />
-      ${photoPreviewUrl ? `<div style="margin-top:10px"><img class="thumb" src="${photoPreviewUrl}" alt="preview" /></div>` : ''}
+      <div class="label">Photos (optional)</div>
+      <input class="input" id="m_photo" type="file" accept="image/*" multiple />
+      ${photoPreviewUrls.length ? `
+        <div class="row" style="flex-wrap:wrap; margin-top:10px">
+          ${photoPreviewUrls.map(u => `<img class="thumb" src="${u}" alt="preview" />`).join('')}
+        </div>
+      ` : ''}
 
       <div class="label">Ingredients (one per line)</div>
       <textarea class="textarea" id="m_ingredients" placeholder="e.g.\n1 cup flour\n2 eggs">${escapeHTML(ingredientsText)}</textarea>
@@ -640,6 +830,7 @@ function manualFormHTML({ mode, title = '', categoryId, ingredientsText = '', in
   `;
 }
 
+
 function bindManualForm({ mode }) {
   const titleEl = document.getElementById('m_title');
   const catEl = document.getElementById('m_category');
@@ -647,12 +838,17 @@ function bindManualForm({ mode }) {
   const insEl = document.getElementById('m_instructions');
   const fileEl = document.getElementById('m_photo');
 
-  let photoBlob = null;
   fileEl.onchange = async () => {
-    const f = fileEl.files?.[0];
-    if (!f) return;
-    photoBlob = await fileToJpegBlob(f);
-    const url = URL.createObjectURL(photoBlob);
+    const files = Array.from(fileEl.files || []);
+    if (!files.length) return;
+
+    // convert all selected files to compressed jpeg blobs
+    addManualPhotoBlobs = [];
+    for (const f of files) {
+      addManualPhotoBlobs.push(await fileToJpegBlob(f));
+    }
+
+    const previewUrls = addManualPhotoBlobs.map(b => URL.createObjectURL(b));
 
     const host = document.getElementById('addFlow');
     host.innerHTML = manualFormHTML({
@@ -661,10 +857,62 @@ function bindManualForm({ mode }) {
       categoryId: catEl.value,
       ingredientsText: ingEl.value,
       instructionsText: insEl.value,
-      photoPreviewUrl: url
+      photoPreviewUrls: previewUrls
     });
     bindManualForm({ mode });
   };
+
+  document.getElementById('m_clear').onclick = () => {
+    addManualPhotoBlobs = [];
+    document.getElementById('addFlow').innerHTML = '';
+  };
+
+  document.getElementById('m_save').onclick = async () => {
+    const title = titleEl.value.trim();
+    const categoryId = catEl.value;
+
+    const ingredients = ingEl.value
+      .split('\n')
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(text => ({ id: uuid(), text, checked: false }));
+
+    const instructions = insEl.value
+      .split('\n')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const hasAnything = title || ingredients.length || instructions.length || addManualPhotoBlobs.length;
+    if (!hasAnything) {
+      addManualPhotoBlobs = [];
+      document.getElementById('addFlow').innerHTML = '';
+      return;
+    }
+
+    const recipe = {
+      id: uuid(),
+      title,
+      categoryId,
+      isFavorite: false,
+      isPhotoOnly: false,
+      ingredients,
+      instructions,
+      photos: addManualPhotoBlobs.slice(), // store all photos
+      createdAt: Date.now(),
+    };
+
+    await putOne(db, Stores.recipes, recipe);
+    await loadAll();
+
+    addManualPhotoBlobs = [];
+    document.getElementById('addFlow').innerHTML = '';
+
+    state.viewingId = recipe.id;
+    state.screen = 'recipe';
+    render();
+  };
+}
+
 
   document.getElementById('m_clear').onclick = () => {
     document.getElementById('addFlow').innerHTML = '';
@@ -711,9 +959,8 @@ function bindManualForm({ mode }) {
     state.screen = 'recipe';
     render();
   };
-}
 
-function photoOnlyFormHTML({ title = '', categoryId, photoPreviewUrl = '' }) {
+function photoOnlyFormHTML({ title = '', categoryId, photoPreviewUrls = [] }) {
   const defaultCat = categoryId || (state.categories[0]?.id || '');
   return `
     <div class="section-title">Photo Only</div>
@@ -724,9 +971,13 @@ function photoOnlyFormHTML({ title = '', categoryId, photoPreviewUrl = '' }) {
       <div class="label">Category</div>
       <select class="select" id="p_category">${categoryOptionsHTML(defaultCat)}</select>
 
-      <div class="label">Photo</div>
-      <input class="input" id="p_photo" type="file" accept="image/*" />
-      ${photoPreviewUrl ? `<div style="margin-top:10px"><img class="thumb" src="${photoPreviewUrl}" alt="preview" /></div>` : ''}
+      <div class="label">Photos</div>
+      <input class="input" id="p_photo" type="file" accept="image/*" multiple />
+      ${photoPreviewUrls.length ? `
+        <div class="row" style="flex-wrap:wrap; margin-top:10px">
+          ${photoPreviewUrls.map(u => `<img class="thumb" src="${u}" alt="preview" />`).join('')}
+        </div>
+      ` : ''}
 
       <div class="hr"></div>
       <div class="row">
@@ -737,28 +988,33 @@ function photoOnlyFormHTML({ title = '', categoryId, photoPreviewUrl = '' }) {
   `;
 }
 
+
 function bindPhotoOnlyForm() {
   const titleEl = document.getElementById('p_title');
   const catEl = document.getElementById('p_category');
   const fileEl = document.getElementById('p_photo');
 
-  let photoBlob = null;
-
   fileEl.onchange = async () => {
-    const f = fileEl.files?.[0];
-    if (!f) return;
-    photoBlob = await fileToJpegBlob(f);
-    const url = URL.createObjectURL(photoBlob);
+    const files = Array.from(fileEl.files || []);
+    if (!files.length) return;
+
+    addPhotoOnlyBlobs = [];
+    for (const f of files) {
+      addPhotoOnlyBlobs.push(await fileToJpegBlob(f));
+    }
+
+    const previewUrls = addPhotoOnlyBlobs.map(b => URL.createObjectURL(b));
     const host = document.getElementById('addFlow');
     host.innerHTML = photoOnlyFormHTML({
       title: titleEl.value,
       categoryId: catEl.value,
-      photoPreviewUrl: url
+      photoPreviewUrls: previewUrls
     });
     bindPhotoOnlyForm();
   };
 
   document.getElementById('p_clear').onclick = () => {
+    addPhotoOnlyBlobs = [];
     document.getElementById('addFlow').innerHTML = '';
   };
 
@@ -766,12 +1022,13 @@ function bindPhotoOnlyForm() {
     const title = titleEl.value.trim();
     const categoryId = catEl.value;
 
-    if (!title && !photoBlob) {
+    if (!title && !addPhotoOnlyBlobs.length) {
+      addPhotoOnlyBlobs = [];
       document.getElementById('addFlow').innerHTML = '';
       return;
     }
-    if (!photoBlob) {
-      alert('Please choose a photo (or use Manual Add).');
+    if (!addPhotoOnlyBlobs.length) {
+      alert('Please choose at least one photo (or use Manual Add).');
       return;
     }
 
@@ -783,12 +1040,14 @@ function bindPhotoOnlyForm() {
       isPhotoOnly: true,
       ingredients: [],
       instructions: [],
-      photos: [photoBlob],
+      photos: addPhotoOnlyBlobs.slice(), // store all photos
       createdAt: Date.now(),
     };
 
     await putOne(db, Stores.recipes, recipe);
     await loadAll();
+
+    addPhotoOnlyBlobs = [];
     document.getElementById('addFlow').innerHTML = '';
 
     state.viewingId = recipe.id;
@@ -838,8 +1097,7 @@ function settingsScreenHTML() {
       <div class="label" style="margin-top:12px">Reorder / Rename / Delete</div>
       <div class="list" id="catList"></div>
 
-      <div class="hr"></div>
-      <div class="small">Data is stored only on this device (offline-first). iCloud sync can be added later.</div>
+      
     </div>
   `;
 }
@@ -934,18 +1192,6 @@ async function moveCategory(catId, dir) {
   render();
 }
 
-async function renameCategory(catId) {
-  const cat = state.categories.find(c => c.id === catId);
-  if (!cat) return;
-  const name = prompt('New category name:', cat.name);
-  if (!name) return;
-  cat.name = name.trim();
-  if (!cat.name) return;
-  await putOne(db, Stores.categories, cat);
-  await loadAll();
-  render();
-}
-
 async function deleteCategoryWithReassign(catId) {
   const cat = state.categories.find(c => c.id === catId);
   if (!cat) return;
@@ -958,7 +1204,7 @@ async function deleteCategoryWithReassign(catId) {
     return;
   }
 
-  const otherCats = state.categories.filter(c => c.id !== catId).sort((a, b) => a.order - b.order);
+  const otherCats = state.categories.filter(c => c.id !== catId);
   if (!otherCats.length) {
     alert('Create another category before deleting the last one.');
     return;
@@ -980,10 +1226,12 @@ async function deleteCategoryWithReassign(catId) {
     r.categoryId = targetId;
     await putOne(db, Stores.recipes, r);
   }
+
   await deleteOne(db, Stores.categories, catId);
   await loadAll();
   render();
 }
+
 
 // ====== Utils ======
 function escapeHTML(s) {

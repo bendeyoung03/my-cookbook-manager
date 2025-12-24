@@ -354,3 +354,216 @@ body[data-theme="sky"]{
   --iconBorder: rgba(0,0,0,0.26);
   --iconText: #0b0e13;
 }
+
+/* Add dropdown arrow to selects */
+.select{
+  appearance:none;
+  -webkit-appearance:none;
+  padding-right:38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='%239aa0a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  background-size:18px 18px;
+}
+
+/* ===== Compact recipe list (recipes screen only) ===== */
+#recipesContent .section-title{
+  margin: 10px 0 6px;     /* was 14px 0 8px */
+  font-size: 11px;        /* slightly smaller */
+}
+
+#recipesContent .list{
+  gap: 6px;               /* was 8px */
+}
+
+#recipesContent .item{
+  padding: 6px 8px;       /* was 8px 10px */
+  gap: 8px;               /* was 10px */
+}
+
+#recipesContent .item-title{
+  font-size: 14px;        /* default was larger via weight only */
+  line-height: 1.15;
+}
+
+#recipesContent .badge{
+  font-size: 11px;        /* was 12px */
+  line-height: 1.2;
+}
+
+
+/* ===== Recipe row thumbnail preview ===== */
+.rowthumb{
+  width:44px;
+  height:44px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  object-fit:cover;
+  flex: 0 0 44px;
+  background: rgba(255,255,255,0.04);
+}
+
+.rowthumb--placeholder{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color: var(--muted);
+  font-size: 18px;
+}
+
+/* ===== Recipe thumbnail polish ===== */
+.rowthumb{
+  position: relative;
+
+  /* existing size stays the same */
+  width:44px;
+  height:44px;
+
+  /* softer look */
+  border-radius: 12px;
+
+  /* subtle depth */
+  box-shadow:
+    0 2px 6px rgba(0,0,0,0.35),
+    inset 0 0 0 1px rgba(255,255,255,0.06);
+
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+/* Slight lift on press (mobile-friendly) */
+.item:active .rowthumb{
+  transform: scale(0.97);
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.35),
+    inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+/* Placeholder refinement */
+.rowthumb--placeholder{
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255,255,255,0.08),
+      rgba(255,255,255,0.02)
+    );
+  font-size: 16px;
+  opacity: 0.9;
+}
+
+/* Optional: slightly round recipe rows now that thumbnails exist */
+#recipesContent .item{
+  border-radius: 16px;
+}
+
+/* Make row thumbs more obviously "photo-like" on desktop */
+.rowthumb{
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+body[data-theme="pearl"] .rowthumb,
+body[data-theme="butter"] .rowthumb,
+body[data-theme="sky"] .rowthumb{
+  border: 1px solid rgba(0,0,0,0.16);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(0,0,0,0.05);
+}
+
+/* ===== Recipe photo strip ===== */
+.photo-strip{
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding: 8px 2px 10px;
+  margin: -2px 0 10px;
+  -webkit-overflow-scrolling: touch;
+}
+.stripthumb{
+  width:72px;
+  height:54px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  object-fit:cover;
+  cursor:pointer;
+  flex: 0 0 auto;
+}
+
+/* ===== Modal photo navigation ===== */
+.modal-photo-wrap{
+  position: relative;
+}
+.modal-nav{
+  position:absolute;
+  top:50%;
+  transform: translateY(-50%);
+  width:42px;
+  height:42px;
+  border-radius:14px;
+}
+#prev.modal-nav{ left:10px; }
+#next.modal-nav{ right:10px; }
+
+/* ===== More visible delete button on edit photo thumbs ===== */
+.photo-del{
+  position:absolute;
+  top:-10px;
+  right:-10px;
+
+  width:28px;
+  height:28px;
+  border-radius:999px;
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  border:1px solid rgba(255,255,255,0.35);
+  background: rgba(0,0,0,0.70);
+  color: #fff;
+
+  font-size:16px;
+  font-weight:1000;
+  cursor:pointer;
+
+  box-shadow: 0 6px 14px rgba(0,0,0,0.45);
+}
+.photo-del:active{ transform: scale(0.96); }
+
+body[data-theme="pearl"] .photo-del,
+body[data-theme="butter"] .photo-del,
+body[data-theme="sky"] .photo-del{
+  border:1px solid rgba(0,0,0,0.25);
+  background: rgba(255,255,255,0.88);
+  color:#0b0e13;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.18);
+}
+
+/* ===== Photo modal dot indicators ===== */
+.photo-dots{
+  display:flex;
+  justify-content:center;
+  gap:6px;
+  margin-top:10px;
+}
+
+.photo-dot{
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  background: rgba(255,255,255,0.35);
+}
+
+.photo-dot.active{
+  background: rgba(255,255,255,0.95);
+}
+
+body[data-theme="pearl"] .photo-dot,
+body[data-theme="butter"] .photo-dot,
+body[data-theme="sky"] .photo-dot{
+  background: rgba(0,0,0,0.25);
+}
+body[data-theme="pearl"] .photo-dot.active,
+body[data-theme="butter"] .photo-dot.active,
+body[data-theme="sky"] .photo-dot.active{
+  background: rgba(0,0,0,0.85);
+}
