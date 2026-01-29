@@ -61,6 +61,9 @@ let addPhotoOnlyBlobs = [];
   db = await openDB();
   await ensureSeed();
   await loadAll();
+  await cloudPullAllRecipesIntoIndexedDB();
+  await loadAll();
+
 
   applyTheme(state.theme);
   setTopTitleFromState();
@@ -178,6 +181,7 @@ function render() {
       if (!r) return;
       r.isFavorite = !r.isFavorite;
       await putOne(db, Stores.recipes, r);
+      await cloudUpsertRecipe(r);
       await loadAll();
       render();
     }));
@@ -511,6 +515,7 @@ function bindRecipeFullScreen(r) {
     resetBtn.addEventListener('click', async () => {
       (r.ingredients || []).forEach(i => i.checked = false);
       await putOne(db, Stores.recipes, r);
+      await cloudUpsertRecipe(r);
       await loadAll();
       render();
     });
@@ -524,6 +529,7 @@ function bindRecipeFullScreen(r) {
       if (!ing) return;
       ing.checked = el.checked;
       await putOne(db, Stores.recipes, r);
+      await cloudUpsertRecipe(r);
       await loadAll();
     });
   });
@@ -755,6 +761,7 @@ function bindEditScreen(r) {
       const idx = Number(btn.dataset.removePhoto);
       r.photos.splice(idx, 1);
       await putOne(db, Stores.recipes, r);
+      await cloudUpsertRecipe(r);
       await loadAll();
       render();
     });
@@ -803,6 +810,7 @@ fileEl.onchange = async () => {
 
 
     await putOne(db, Stores.recipes, r);
+    await cloudUpsertRecipe(r);
     await loadAll();
 
     // return to recipe view after saving
@@ -816,6 +824,7 @@ fileEl.onchange = async () => {
     const ok = confirm('Delete this recipe?');
     if (!ok) return;
     await deleteOne(db, Stores.recipes, r.id);
+    await cloudDeleteRecipe(r.id);
     await loadAll();
     state.screen = 'recipes';
     state.editingId = null;
@@ -938,6 +947,8 @@ function bindManualForm({ mode }) {
     };
 
     await putOne(db, Stores.recipes, recipe);
+    await cloudUpsertRecipe(recipe);
+
     await loadAll();
 
     addManualPhotoBlobs = [];
@@ -1080,8 +1091,10 @@ function bindPhotoOnlyForm() {
       createdAt: Date.now(),
     };
 
-    await putOne(db, Stores.recipes, recipe);
-    await loadAll();
+      await putOne(db, Stores.recipes, recipe);
+  await cloudUpsertRecipe(recipe);
+  await loadAll();
+
 
     addPhotoOnlyBlobs = [];
     document.getElementById('addFlow').innerHTML = '';
@@ -1290,11 +1303,67 @@ async function deleteCategoryWithReassign(catId) {
   for (const r of affected) {
     r.categoryId = targetId;
     await putOne(db, Stores.recipes, r);
+    await cloudUpsertRecipe(r);
   }
 
   await deleteOne(db, Stores.categories, catId);
   await loadAll();
   render();
+}
+
+// ===== Cloud Recipe Sync (Step 2) =====
+function canCloudSync() {
+  return !!(cloudUser && window.cloudDB);
+}
+
+function recipeToCloudDoc(r) {
+  const copy = { ...r };
+  copy.photos = []; // photos stay local for now
+  return copy;
+}
+
+async function cloudUpsertRecipe(r) {
+  if (!canCloudSync()) return;
+
+  await cloudDB
+    .collection("users")
+    .doc(cloudUser.uid)
+    .collection("recipes")
+    .doc(r.id)
+    .set(recipeToCloudDoc(r), { merge: true });
+}
+
+async function cloudDeleteRecipe(recipeId) {
+  if (!canCloudSync()) return;
+
+  await cloudDB
+    .collection("users")
+    .doc(cloudUser.uid)
+    .collection("recipes")
+    .doc(recipeId)
+    .delete();
+}
+
+async function cloudPullAllRecipesIntoIndexedDB() {
+  if (!canCloudSync()) return;
+
+  const snap = await cloudDB
+    .collection("users")
+    .doc(cloudUser.uid)
+    .collection("recipes")
+    .get();
+
+  for (const d of snap.docs) {
+    const r = d.data();
+
+    // Preserve any local photos already saved
+    const existing = state.recipes.find(x => x.id === r.id);
+    if (existing?.photos?.length) r.photos = existing.photos;
+
+    await putOne(db, Stores.recipes, r);
+    await cloudUpsertRecipe(r);
+
+  }
 }
 
 
