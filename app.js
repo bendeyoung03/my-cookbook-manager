@@ -16,6 +16,29 @@ let state = {
   viewingId: null,
 };
 
+// ===== Cloud Auth (step 1 only) =====
+let cloudUser = null;
+
+async function initCloudAuth() {
+  if (!window.cloudAuth) return;
+
+  return new Promise(resolve => {
+    cloudAuth.onAuthStateChanged(user => {
+      cloudUser = user || null;
+      resolve();
+    });
+  });
+}
+
+async function signInWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  await cloudAuth.signInWithPopup(provider);
+}
+
+async function signOutCloud() {
+  await cloudAuth.signOut();
+}
+
 // ====== Add flow draft photos (kept in-memory only) ======
 let addManualPhotoBlobs = [];
 let addPhotoOnlyBlobs = [];
@@ -23,6 +46,8 @@ let addPhotoOnlyBlobs = [];
 
 // ====== Boot ======
 (async function init() {
+  await initCloudAuth();
+
   db = await openDB();
   await ensureSeed();
   await loadAll();
@@ -519,20 +544,21 @@ function openPhotoViewerGallery(blobs, startIndex = 0) {
   backdrop.className = 'modal-backdrop';
 
   const modal = document.createElement('div');
-  modal.className = 'modal';
+  modal.className = 'modal modal--fullscreen';
 
   modal.innerHTML = `
-  <div class="row-between" style="margin-bottom:10px">
-    <div class="item-title">Photo <span class="small" id="photoCount"></span></div>
-    <button class="btn" id="close">Done</button>
+  <button class="fs-close" id="close" aria-label="Close photo viewer">Done</button>
+
+  <div class="fs-stage">
+    <img class="fs-img" id="photoImg" alt="Photo" />
   </div>
 
-    <div class="modal-photo-wrap">
-    <img class="full" id="photoImg" alt="Photo" />
+  <div class="fs-bottom">
+    <div class="small fs-count" id="photoCount"></div>
+    <div class="photo-dots" id="photoDots" aria-hidden="true"></div>
   </div>
-
-  <div class="photo-dots" id="photoDots" aria-hidden="true"></div>
 `;
+
 
   function renderAt(i) {
   idx = i;
@@ -1097,7 +1123,15 @@ function settingsScreenHTML() {
       <div class="label" style="margin-top:12px">Reorder / Rename / Delete</div>
       <div class="list" id="catList"></div>
 
-      
+            <div class="hr"></div>
+      <div class="section-title">Cloud Sync</div>
+      <div class="small">Sign in to enable syncing across devices.</div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn btn-primary" id="cloudSignIn">Sign in with Google</button>
+        <button class="btn" id="cloudSignOut">Sign out</button>
+      </div>
+      <div class="small" id="cloudStatus" style="margin-top:8px"></div>
+
     </div>
   `;
 }
@@ -1140,6 +1174,27 @@ function bindSettingsScreen() {
   };
 
   renderCategoryManager();
+
+    // ----- Cloud sign-in/out (additive) -----
+  const status = document.getElementById('cloudStatus');
+  if (status) status.textContent = cloudUser ? 'Signed in' : 'Not signed in';
+
+  const inBtn = document.getElementById('cloudSignIn');
+  if (inBtn) inBtn.onclick = async () => {
+    try {
+      await signInWithGoogle();
+      render(); // refresh UI
+    } catch (e) {
+      alert('Sign-in failed. Make sure Google sign-in is enabled in Firebase.');
+    }
+  };
+
+  const outBtn = document.getElementById('cloudSignOut');
+  if (outBtn) outBtn.onclick = async () => {
+    await signOutCloud();
+    render(); // refresh UI
+  };
+
 }
 
 function renderCategoryManager() {

@@ -567,3 +567,75 @@ body[data-theme="butter"] .photo-dot.active,
 body[data-theme="sky"] .photo-dot.active{
   background: rgba(0,0,0,0.85);
 }
+
+/* ===== Full-screen photo viewer ===== */
+.modal--fullscreen{
+  width: 100vw;
+  height: 100vh;
+  max-height: none;
+  border-radius: 0;
+  border: none;
+  padding: 0;
+  background: rgba(0,0,0,0.96);
+  overflow: hidden;
+}
+
+/* Center the image */
+.fs-stage{
+  position: absolute;
+  inset: 0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:
+    calc(14px + env(safe-area-inset-top))
+    14px
+    calc(60px + env(safe-area-inset-bottom))
+    14px;
+}
+
+/* True full-screen image behavior */
+.fs-img{
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* no cropping */
+  border-radius: 0;
+  border: none;
+}
+
+/* Floating close button */
+.fs-close{
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  right: 12px;
+  z-index: 2;
+
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  padding: 10px 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.fs-close:active{ transform: scale(0.98); }
+
+/* Bottom overlay: count + dots */
+.fs-bottom{
+  position:absolute;
+  left:0; right:0;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
+  z-index: 2;
+  pointer-events: none; /* so swiping on image still works */
+}
+.fs-count{
+  color: rgba(255,255,255,0.75);
+}
+.photo-dots{ pointer-events: none; }
+
+/* Ensure full-screen modal truly fills the screen */
+.modal-backdrop{ padding: 0; }

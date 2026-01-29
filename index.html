@@ -27,5 +27,25 @@
       navigator.serviceWorker.register('./sw.js');
     }
   </script>
+  <!-- Firebase libraries (browser version) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyBU6G06hszFeo2G43oeAa5KfAsJL1ttAOw",
+    authDomain: "bensrecipekeeper.firebaseapp.com",
+    projectId: "bensrecipekeeper",
+    storageBucket: "bensrecipekeeper.firebasestorage.app",
+    messagingSenderId: "516246255851",
+    appId: "1:516246255851:web:02c6c9757a6b4f8f7026ae"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  window.cloudDB = firebase.firestore();
+  window.cloudAuth = firebase.auth();
+</script>
+
 </body>
 </html>
