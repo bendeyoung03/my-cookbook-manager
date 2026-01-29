@@ -24,15 +24,25 @@ async function initCloudAuth() {
 
   return new Promise(resolve => {
     cloudAuth.onAuthStateChanged(user => {
-      cloudUser = user || null;
-      resolve();
-    });
+  cloudUser = user || null;
+
+  // If we're currently on settings, refresh UI to show correct status
+  if (state.screen === 'settings') render();
+
+  resolve();
+});
+
   });
 }
 
 async function signInWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
-  await cloudAuth.signInWithPopup(provider);
+  const cred = await cloudAuth.signInWithPopup(provider);
+
+  // Immediately update local state so UI reflects sign-in right away
+  cloudUser = cred.user || cloudAuth.currentUser || null;
+
+  return cloudUser;
 }
 
 async function signOutCloud() {
